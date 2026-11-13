@@ -64,7 +64,7 @@
         let popupQueue = [];
         let popupShowingId = null;
 
-        document.getElementbyId("logoutBtn").addEventListener("click", async () => {
+        document.getElementById("logoutBtn").addEventListener("click", async () => {
             if (confirm("Apakah anda yakin ingin keluar?")) {
                 await EXILE.logout();
                 window.location.href = "login.html";
