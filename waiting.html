@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status Pengajuan - Exile</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="assets/Exile_Logo.jpeg" alt="Logo Exile" style="height: 28px;">
+            <div class="brand-word">EX<span style="color:var(--emas)">ILE</span></div>
+        </div>
+        <div class="nav-right">
+            <div class="nav-user">Halo, <b id="navNama">-</b></div>
+            <button class="btn-logout" id="logoutBtn">Keluar</button>
+        </div>
+    </nav>
+
+    <div class="center-screen" style="min-height:auto;padding-top:36px;">
+        <div class="auth-wrap" style="max-width:460px;">
+
+            <!-- ================= STATE: pending / calling / reviewing ================= -->
+            <div class="card wait-card" id="waitCard">
+                <div class="wait-icon spin" id="waitIcon"><span data-icon="send" data-size="34"></span></div>
+                <div class="wait-status" id="waitStatus">Pengajuan Terkirim</div>
+                <div class="wait-desc" id="waitDesc">Pengajuanmu sudah masuk ke sistem. Tekan tombol di bawah untuk memberitahu guru piket sekarang.</div>
+
+                <div class="summary-box" id="summaryBox"></div>
+
+                <button class="btn btn-secondary" id="callBtn"><span data-icon="bell"></span> Panggil Guru Piket</button>
+            </div>
+
+            <!-- ================= STATE: accepted ================= -->
+            <div class="card" id="letterCard" style="display:none;padding:24px;">
+                <div class="letter print-area" id="letterContent"></div>
+                <div class="action-row no-print">
+                    <button class="btn btn-outline" onclick="window.print()"><span data-icon="printer"></span> Cetak / Simpan PDF</button>
+                    <button class="btn btn-primary" onclick="window.location.href='home.html'">Ke Beranda</button>
+                </div>
+            </div>
+
+            <!-- ================= STATE: rejected ================= -->
+            <div class="card" id="rejectCard" style="display:none;padding:30px;">
+                <div style="text-align:center;">
+                    <div class="wait-icon" style="background:var(--merah-pucat);"><span data-icon="xCircle" data-size="34"></span></div>
+                    <div class="wait-status" style="color:#b3261e;">Pengajuan Ditolak</div>
+                </div>
+                <div class="reject-box" id="rejectReason" style="margin-top:18px;"></div>
+                <div class="action-row">
+                    <button class="btn btn-outline" onclick="window.location.href='home.html'">Ke Beranda</button>
+                    <button class="btn btn-primary" onclick="window.location.href='form.html'">Ajukan Lagi</button>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <script type="module" src="assets/icons.js"></script>
+    <script type="module" src="assets/app.js"></script>
+    <script type="module">
+        const user = await EXILE.requireAuth();
+        const params = new URLSearchParams(window.location.search);
+        const reqId = params.get("id");
+        let req = null;
+
+        function notFound() {
+            alert("Pengajuan tidak ditemukan.");
+            window.location.href = "home.html";
+        }
+
+        if (user) document.getElementById("navNama").textContent = user.nama;
+
+        document.getElementById("logoutBtn").addEventListener("click", async () => {
+            if (confirm("Yakin ingin keluar akun?")) {
+                await EXILE.logout();
+                window.location.href = "login.html";
+            }
+        });
+
+        const waitCard = document.getElementById("waitCard");
+        const letterCard = document.getElementById("letterCard");
+        const rejectCard = document.getElementById("rejectCard");
+        const waitIcon = document.getElementById("waitIcon");
+        const waitStatus = document.getElementById("waitStatus");
+        const waitDesc = document.getElementById("waitDesc");
+        const callBtn = document.getElementById("callBtn");
+        const summaryBox = document.getElementById("summaryBox");
+
+        function renderSummary(r) {
+            summaryBox.innerHTML = `
+            <div class="row"><span>Nama</span><span>${r.nama}</span></div>
+            <div class="row"><span>Kelas</span><span>${r.kelas}</span></div>
+            <div class="row"><span>No. Absen</span><span>${r.noAbsen}</span></div>
+            <div class="row"><span>Alasan</span><span>${r.alasan}</span></div>
+            `;
+        }
+
+        function renderLetter(r) {
+            const qrText = encodeURIComponent(
+            `SURAT IZIN KELUAR SEKOLAH\nKode: ${r.kodeSurat}\nNama: ${r.nama}\nKelas: ${r.kelas}\nNo. Absen: ${r.noAbsen}\nAlasan: ${r.alasan}\nDisetujui: ${EXILE.formatWaktu(r.updatedAt)}\nSMKN 1 Cilegon`
+            );
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${qrText}`;
+
+            document.getElementById("letterContent").innerHTML = `
+            <div class="letter-head">
+                <img src="assets/Exile_Logo.jpeg" alt="logo Exile" class="mini-logo">
+                <div>
+                    <h3>Exile - Express Digital Leave</h3>
+                    <p>SMKN 1 Cilegon</p>
+                </div>
+            </div>
+                <div class="letter-title">SURAT IZIN KELUAR LINGKUNGAN SEKOLAH</div>
+                <div class="letter-code">No. ${r.kodeSurat}</div>
+
+                <table class="letter-table">
+                    <tr><td>Nama</td><td>:</td><td>${r.nama}</td></tr>
+                    <tr><td>Kelas</td><td>:</td><td>${r.kelas}</td></tr>
+                    <tr><td>No. Absen</td><td>:</td><td>${r.noAbsen}</td></tr>
+                    <tr><td>Alasan</td><td>:</td><td>${r.alasan}</td></tr>
+                    <tr><td>Waktu Disetujui</td><td>:</td><td>${EXILE.formatWaktu(r.updatedAt)}</td></tr>
+                </table>
+
+            <div class="letter-qr">
+                <img src="${qrUrl}" alt="QR Code Surat Izin">
+                <div class="cap">Pindai kode QR untuk memverifikasi keaslian surat ini</div>
+            </div>
+
+            <div class="letter-foot">
+                <span>Dicetak otomatis oleh sistem Exile</span>
+                <div class="stamp">
+                    <b>${icon("check", 14)} Disetujui</b>
+                    Guru Piket
+                </div>
+            </div>
+            `;
+        }
+
+        function renderState() {
+            if (!req) return;
+
+            if (req.status === "accepted") {
+                waitCard.style.display = "none";
+                rejectCard.style.display = "none";
+                letterCard.style.display = "block";
+                renderLetter(req);
+                return;
+            }
+
+            if (req.status === "rejected") {
+                waitCard.style.display = "none";
+                letterCard.style.display = "none";
+                rejectCard.style.display = "block";
+                document.getElementById("rejectReason").innerHTML = `
+                <b>Alasan penolakan:</b>
+                ${req.alasanTolak ? req.alasanTolak : "Guru piket tidak memberikan alasan spesifik. Silakan konfirmasi langsung ke ruang piket."}
+                `;
+                return;
+            }
+
+            // pending / calling / reviewing
+            waitCard.style.display = "block";
+            letterCard.style.display = "none";
+            rejectCard.style.display = "none";
+            renderSummary(req);
+
+            if (req.status === "pending") {
+                waitIcon.innerHTML = icon("send", 34);
+                waitStatus.textContent = "Pengajuan Terkirim";
+                waitDesc.textContent = "Pengajuanmu sudah masuk ke sistem. Tekan tombol di bawah untuk memberitahu guru piket sekarang.";
+                callBtn.style.display = "inline-flex";
+                callBtn.disabled = false;
+                callBtn.innerHTML = `${icon("bell")} Panggil Guru Piket`;
+            } else if (req.status === "calling") {
+                waitIcon.innerHTML = icon("bell", 34);
+                waitStatus.innerHTML = `Memanggil Guru Piket<span class="dots"></span>`;
+                waitDesc.textContent = "Notifikasi sudah dikirim ke layar guru piket. Mohon tunggu sebentar.";
+                callBtn.style.display = "inline-flex";
+                callBtn.disabled = true;
+                callBtn.textContent = "Menunggu tanggapan...";
+            } else if (req.status === "reviewing") {
+                waitIcon.innerHTML = icon("user", 34);
+                waitStatus.innerHTML = `Guru Sedang Merespon<span class="dots"></span>`;
+                waitDesc.textContent = "Guru piket sedang meninjau pengajuanmu. Halaman ini akan otomatis berubah begitu ada keputusan.";
+                callBtn.style.display = "none";
+            }
+        }
+
+        callBtn.addEventListener("click", async () => {
+            try {
+                await EXILE.updateRequestStatus(reqId, "calling");
+                EXILE.playCallSound(); // juga bunyi di sisi murid sbg konfirmasi (opsional)
+            } catch (err) {
+                EXILE.toast("Gagal memanggil guru piket. Coba lagi.");
+            }
+        });
+
+        // Listener real-time: halaman ini update otomatis begitu guru piket merespon
+        if (user) {
+            EXILE.listenRequest(
+                reqId,
+                (data) => {
+                    if (!data || data.userId !== user.id) return notFound();
+                    req = data;
+                    renderState();
+                },
+                () => notFound()   // Rules menolak / pengajuan bukan milik user ini
+            );
+        }
+    </script>
+
+</body>
+</html>

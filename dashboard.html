@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Guru Piket - Exile</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="assets/Exile_Logo.jpeg" alt="Logo Exile" style="height: 28px;">
+            <div class="brand-word">EX<span style="color:var(--emas)">ILE</span></div>
+        </div>          
+        <div class="nav-right">
+            <div class="nav-user" id="soundStatus"><span data-icon="volume"></span> Suara aktif</div>
+            <button class="btn-logout" id="muteBtn">Bisukan</button>
+        </div>
+    </nav>
+
+    <div class="dash-wrap">
+
+        <div class="dash-header">
+            <div>
+                <h1>Panel Guru Piket</h1>
+                <p>Kelola pengajuan izin keluar murid secara real-time</p>
+            </div>
+        </div>
+
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="active"><span data-icon="dot" data-size="14"></span> Perlu Ditinjau</button>
+            <button class="filter-tab" data-filter="accepted"><span data-icon="okCircle" data-size="14"></span> Disetujui</button>
+            <button class="filter-tab" data-filter="rejected"><span data-icon="xCircle" data-size="14"></span> Ditolak</button>
+            <button class="filter-tab" data-filter="all"><span data-icon="list" data-size="14"></span> Semua</button>
+        </div>
+
+        <div class="dash-table" id="dashTable"></div>
+
+    </div>
+
+    <!-- Popup panggilan masuk -->
+    <div class="modal-overlay" id="callModal">
+        <div class="modal-box">
+            <div class="ring"><span data-icon="bell" data-size="30"></span></div>
+            <h3>Panggilan Izin Masuk</h3>
+            <p>Seorang murid meminta persetujuan izin keluar</p>
+            <div class="modal-detail" id="modalDetail"></div>
+            <button class="btn btn-primary" id="modalRespondBtn">Lihat &amp; Tanggapi</button>
+        </div>
+    </div>
+
+    <script type="module" src="assets/icons.js"></script>
+    <script type="module" src="assets/app.js"></script>
+    <script type="module">
+    // Hanya akun guru piket yang boleh membuka halaman ini
+        const user = await EXILE.requirePiket();
+        let allRequests = [];
+        let soundOn = true;
+        let currentFilter = "active";
+        let lastSeenIds = new Set(); // untuk deteksi request baru
+        let lastSeenStatus = {}; // untuk deteksi perubahan status -> calling
+        let popupQueue = [];
+        let popupShowingId = null;
+
+        document.getElementById("muteBtn").addEventListener("click", () => {
+            soundOn = !soundOn;
+            document.getElementById("soundStatus").innerHTML = soundOn ? `${icon("volume")} Suara aktif` : `${icon("mute")} Dibisukan`;
+            document.getElementById("muteBtn").textContent = soundOn ? "Bisukan" : "Aktifkan";
+        });
+
+        document.querySelectorAll(".filter-tab").forEach(tab => {
+            tab.addEventListener("click", () => {
+                document.querySelectorAll(".filter-tab").forEach(t => t.classList.remove("active"));
+                tab.classList.add("active");
+                currentFilter = tab.dataset.filter;
+                render();
+            });
+        });
+
+        function initial(name) {
+            return name.trim().split(" ").slice(0,2).map(w => w[0]).join("").toUpperCase();
+        }
+
+        function render() {
+            const all = allRequests;
+
+            // ---- deteksi status baru jadi "calling" -> munculkan popup + bunyi ----
+            all.forEach(r => {
+                const prev = lastSeenStatus[r.id];
+                if (r.status === "calling" && prev !== "calling") {
+                    if (!popupQueue.includes(r.id) && popupShowingId !== r.id) {
+                        popupQueue.push(r.id);
+                }
+                }
+                lastSeenStatus[r.id] = r.status;
+            });
+            processPopupQueue();
+
+            // ---- render list sesuai filter ----
+            let list = all;
+            if (currentFilter === "active") {
+                list = all.filter(r => ["pending","calling","reviewing"].includes(r.status));
+            } else if (currentFilter === "accepted") {
+                list = all.filter(r => r.status === "accepted");
+            } else if (currentFilter === "rejected") {
+                list = all.filter(r => r.status === "rejected");
+            }
+            list = list.slice().sort((a,b) => b.updatedAt - a.updatedAt);
+
+            const table = document.getElementById("dashTable");
+            if (list.length === 0) {
+                table.innerHTML = `<div class="empty-state">Tidak ada pengajuan di kategori ini.</div>`;
+                return;
+            }
+
+            table.innerHTML = list.map(r => `
+            <div class="dash-item ${r.status === 'calling' ? 'is-calling' : ''}">
+                <div class="avatar">${initial(r.nama)}</div>
+                <div class="d-info">
+                    <div class="d-name">${r.nama} <span class="badge badge-${r.status}" style="margin-left:6px;">${EXILE.STATUS_LABEL[r.status]}</span></div>
+                    <div class="d-meta">Kelas ${r.kelas} · No. Absen ${r.noAbsen} · ${EXILE.formatWaktu(r.createdAt)}</div>
+                    <div class="d-alasan">"${escapeHtml(r.alasan)}"</div>
+                    ${r.status === 'rejected' && r.alasanTolak ? `<div class="d-alasan" style="color:#b3261e;">Ditolak: ${escapeHtml(r.alasanTolak)}</div>` : ''}
+                </div>
+                <div class="d-actions">
+                    ${['pending','calling','reviewing'].includes(r.status) ? `
+                    <button class="btn btn-primary" onclick="respond('${r.id}','accepted')">${icon("check", 14)} ACC</button>
+                    <button class="btn btn-danger" onclick="respond('${r.id}','rejected')">${icon("x", 14)} Tolak</button>
+                    ` : `<span style="font-size:12px;color:var(--abu-400);">Selesai diproses</span>`}
+                </div>
+            </div>
+            `).join("");
+        }
+
+        function escapeHtml(str) {
+            const d = document.createElement("div");
+            d.textContent = str;
+            return d.innerHTML;
+        }
+
+        function processPopupQueue() {
+            if (popupShowingId || popupQueue.length === 0) return;
+            const id = popupQueue.shift();
+            const r = allRequests.find(x => x.id === id);
+            if (!r || r.status !== "calling") { processPopupQueue(); return; }
+
+            popupShowingId = id;
+            if (soundOn) EXILE.playCallSound();
+
+            document.getElementById("modalDetail").innerHTML = `
+            <div class="row"><span>Nama</span><span>${r.nama}</span></div>
+            <div class="row"><span>Kelas</span><span>${r.kelas}</span></div>
+            <div class="row"><span>No. Absen</span><span>${r.noAbsen}</span></div>
+            <div class="row"><span>Alasan</span><span>${escapeHtml(r.alasan)}</span></div>
+            `;
+            document.getElementById("callModal").classList.add("show");
+
+            document.getElementById("modalRespondBtn").onclick = () => {
+                document.getElementById("callModal").classList.remove("show");
+                // begitu popup ditutup guru, status berubah jadi "reviewing"
+                // -> di layar murid akan muncul "Guru sedang merespon..."
+                EXILE.updateRequestStatus(id, "reviewing", { respondedBy: "Guru Piket" });
+                popupShowingId = null;
+                render();
+                processPopupQueue();
+            };
+        }
+
+        async function respond(id, decision) {
+            try {
+                if (decision === "rejected") {
+                    const alasan = prompt("Alasan penolakan (opsional, boleh dikosongkan):", "");
+                    await EXILE.updateRequestStatus(id, "rejected", { alasanTolak: alasan || null });
+                    EXILE.toast("Pengajuan ditolak.");
+                } else {
+                    await EXILE.updateRequestStatus(id, "accepted", { kodeSurat: EXILE.kodeSurat() });
+                    EXILE.toast("Pengajuan disetujui. Surat elektronik telah dibuat untuk murid.");
+                }
+            } catch (err) {
+                EXILE.toast("Gagal menyimpan keputusan. Coba lagi.");
+            }
+        }
+        // onclick="respond(...)" di HTML butuh fungsi global, sedangkan module tidak global
+        window.respond = respond;
+
+        // Listener real-time: render ulang tiap data pengajuan berubah
+        if (user) {
+            EXILE.listenAllRequests((reqs) => {
+                allRequests = reqs;
+                render();
+            });
+        }
+    </script>
+</body>
+</html>

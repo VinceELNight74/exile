@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exile - Express Izin Keluar Sekolah</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+    <div class="splash">
+        <div class="brand-logo" style="margin-bottom:0;">
+            <div class="ex"><span>E</span><span>X</span></div>
+            <div class="tag">Exile</div>
+        </div>
+        <div class="spinner"></div>
+        <p style="font-size:12.5px;color:var(--abu-400);">Memuat Exile...</p>
+    </div>
+
+    <script type="module" src="assets/app.js"></script>
+    <script type="module">
+    const user = await EXILE.getCurrentUser();
+    window.location.href = user
+        ? (EXILE.isPiket(user) ? "dashboard.html" : "home.html")
+        : "login.html";
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beranda - Exile</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="assets/Exile_Logo.jpeg" alt="Logo Exile" style="height: 28px;">
+            <div class="brand-word">EX<span style="color:var(--emas)">ILE</span></div>
+        </div>
+        <div class="nav-right">
+            <div class="nav-user">Halo, <b id="navNama">-</b></div>
+            <button class="btn-logout" id="logoutBtn">Keluar</button>
+        </div>
+    </nav>
+
+    <div class="page-wrap">
+
+        <div class="hero">
+            <div class="brand-logo" style="background: none;">
+                <img src="assets/Exile_Logo.jpeg" alt="Logo Exile" style="width: 100%; height: 100%; object-fit: contain; display: inline-block; border: 1px solid rgba(240,199,107,0.4); ">
+            </div>
+            <span class="hero-eyebrow">SMKN 1 Cilegon</span>
+            <h1>Selamat datang di <span class="accent">Exile</span></h1>
+            <p>Express Izin Keluar Lingkungan Sekolah - ajukan surat izin keluar tanpa perlu jauh-jauh ke ruang guru. Cepat, transparan, dan langsung diproses guru piket.</p>
+            <button class="btn btn-secondary" onclick="window.location.href='form.html'"><span data-icon="file"></span> Buat Surat Izin Keluar</button>
+        </div>
+
+        <div class="stat-row">
+            <div class="stat-box">
+                <div class="num" id="statTotal">0</div>
+                <div class="label">Total Pengajuan</div>
+            </div>
+            <div class="stat-box">
+                <div class="num" id="statAccepted">0</div>
+                <div class="label">Disetujui</div>
+            </div>
+            <div class="stat-box">
+                <div class="num" id="statPending">0</div>
+                <div class="label">Diproses</div>
+            </div>
+        </div>
+
+        <div class="section-title">Riwayat Pengajuan Saya</div>
+        <div class="req-list" id="reqList"></div>
+
+    </div>
+
+    <script type="module" src="assets/icons.js"></script>
+    <script type="module" src="assets/app.js"></script>
+    <script type="module">
+        const user = await EXILE.requireAuth();
+        if (user) {
+            document.getElementById("navNama").textContent = user.nama;
+            EXILE.listenRequestsByUser(user.id, render);
+        }
+
+        document.getElementById("logoutBtn").addEventListener("click", async () => {
+            if (confirm("Yakin ingin keluar akun?")) {
+                await EXILE.logout();
+                window.location.href = "login.html";
+            }
+        });
+
+        function render(reqs) {
+            document.getElementById("statTotal").textContent = reqs.length;
+            document.getElementById("statAccepted").textContent = reqs.filter(r => r.status === "accepted").length;
+            document.getElementById("statPending").textContent = reqs.filter(r => ["pending","calling","reviewing"].includes(r.status)).length;
+
+            const list = document.getElementById("reqList");
+            if (reqs.length === 0) {
+                list.innerHTML = `<div class="empty-state">Belum ada pengajuan izin. Klik tombol "Buat Surat Izin Keluar" di atas untuk membuat pengajuan pertamamu.</div>`;
+                return;
+            }
+
+            list.innerHTML = reqs.map(r => `
+            <div class="req-item" onclick="window.location.href='waiting.html?id=${r.id}'" style="cursor:pointer;">
+                <div class="info">
+                    <div class="alasan">${escapeHtml(r.alasan)}</div>
+                    <div class="meta">${EXILE.formatWaktu(r.createdAt)}</div>
+                </div>
+                <span class="badge badge-${r.status}">${EXILE.STATUS_LABEL[r.status]}</span>
+            </div>
+            `).join("");
+        }
+
+        function escapeHtml(str) {
+            const d = document.createElement("div");
+            d.textContent = str;
+            return d.innerHTML;
+        }
+
+    </script>
+
+</body>
+</html>
