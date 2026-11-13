@@ -16,6 +16,7 @@
         <div class="nav-right">
             <div class="nav-user" id="soundStatus"><span data-icon="volume"></span> Suara aktif</div>
             <button class="btn-logout" id="muteBtn">Bisukan</button>
+            <button class="btn-logout" id="logoutBtn">Keluar</button>
         </div>
     </nav>
 
@@ -62,6 +63,12 @@
         let lastSeenStatus = {}; // untuk deteksi perubahan status -> calling
         let popupQueue = [];
         let popupShowingId = null;
+
+        document.getElementbyId("logoutBtn").addEventListener("click", async () => {
+            if (confirm("Apakah anda yakin ingin keluar?")) {
+                await EXILE.logout();
+                window.location.href = "login.html";
+            }
 
         document.getElementById("muteBtn").addEventListener("click", () => {
             soundOn = !soundOn;
